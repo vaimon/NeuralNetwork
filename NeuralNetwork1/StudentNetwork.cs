@@ -185,8 +185,8 @@ namespace NeuralNetwork1
             {
                 cnt++;
                 forwardPropagation(sample.input);
-                sample.ProcessPrediction(layers.Last().Select(n => n.Output).ToArray());
-                if (sample.EstimatedError() <= acceptableError || cnt > 50)
+                //sample.ProcessPrediction(layers.Last().Select(n => n.Output).ToArray());
+                if (lossFunction(layers.Last().Select(n => n.Output).ToArray(), sample.outputVector) <= acceptableError || cnt > 50)
                 {
                     return cnt;
                 }
