@@ -29,6 +29,8 @@ namespace NeuralNetwork1
         /// </summary>
         public FigureType recognizedClass;
 
+        public double[] outputVector;
+
         /// <summary>
         /// Конструктор образа - на основе входных данных для сенсоров, при этом можно указать класс образа, или не указывать
         /// </summary>
@@ -44,6 +46,12 @@ namespace NeuralNetwork1
 
             recognizedClass = FigureType.Undef;
             actualClass = sampleClass;
+            
+            outputVector = new double[classesCount];
+            for (int i = 0; i < outputVector.Length; i++)
+            {
+                outputVector[i] = i == (int)actualClass ? 1: 0;
+            }
         }
 
         /// <summary>

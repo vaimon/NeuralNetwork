@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace NeuralNetwork1
 {
     class Neuron
     {
         public static Func<double, double> activationFunction;
+        public static Func<double, double> activationFunctionDerivative;
         
         public int id;
         public double input;
@@ -34,6 +36,7 @@ namespace NeuralNetwork1
         {
             this.id = id;
             this.layer = layer;
+            this.error = 0;
         }
     }
 
@@ -52,12 +55,16 @@ namespace NeuralNetwork1
     public class StudentNetwork : BaseNetwork
     {
         private const int hiddenLayersCount = 2;
+        private const double learningRate = 0.01;
 
         private Dictionary<Bond, double> weights;
 
         private Neuron biasNeuron;
         private List<Neuron[]> layers;
 
+        private Func<double[],double[], double> lossFunction;
+        private Func<double,double, double> lossFunctionDerivative;
+        
         public StudentNetwork(int[] structure)
         {
             if (structure.Length != 4)
@@ -65,7 +72,21 @@ namespace NeuralNetwork1
                 throw new ArgumentException("Мы же договаривались о 2 скрытых слоях...");
             }
 
-            //TODO Activation function
+            lossFunction = (output, aim) =>
+            {
+                double res = 0;
+                for (int i = 0; i < aim.Length; i++)
+                {
+                    res += Math.Pow(aim[i] - output[i], 2);
+                }
+
+                return res * 0.5; // / n to become MSE
+            };
+
+            lossFunctionDerivative = (output, aim) => output - aim;
+
+            Neuron.activationFunction = s => 1.0 / (1.0 + Math.Exp(-s));
+            Neuron.activationFunctionDerivative = s => s * (1 - s);
             
             Random random = new Random();
 
@@ -103,6 +124,7 @@ namespace NeuralNetwork1
             {
                 throw new ArgumentException("Вы мне подсунули какой-то странный входной массив.");
             }
+            // Копируем наши данные от сенсоров сразу в их output
             for (int i = 0; i < layers[0].Length; i++)
             {
                 layers[0][i].input = sample.input[i];
@@ -112,21 +134,67 @@ namespace NeuralNetwork1
             {
                 for (int neuron = 0; neuron < layers[layer].Length; neuron++)
                 {
+                    // Считаем скалярное произведение от предыдущих нейрончиков
                     double scalar = 0;
                     foreach (var prevNeuron in layers[layer - 1])
                     {
                         scalar += prevNeuron.Output * weights[new Bond(prevNeuron.id, layers[layer][neuron].id)];
                     }
-
+                    // Добавялем к этому произведению bias
+                    scalar += biasNeuron.Output * weights[new Bond(biasNeuron.id, layers[layer][neuron].id)];
+                    // Получили наш вход
                     layers[layer][neuron].input = scalar;
+                }
+            }
+        }
+
+        public void backwardPropagation(Sample sample)
+        {
+            var aim = sample.outputVector;
+            // Для выходного слоя применяем производную лосс-функции
+            for (var i = 0; i < layers.Last().Length; i++)
+            {
+                layers.Last()[i].error = lossFunctionDerivative(layers.Last()[i].Output, aim[i]);
+            }
+
+            for (int layer = layers.Count - 1; layer >= 1; layer--)
+            {
+                foreach (var neuron in layers[layer])
+                {
+                    // Применяем производную функции активации
+                    neuron.error *= Neuron.activationFunctionDerivative(neuron.Output);
+
+                    // Считаем страшную сумму ошибок для предыдущего слоя и меняем веса
+                    foreach (var prevNeuron in layers[layer - 1])
+                    {
+                        prevNeuron.error += neuron.error * weights[new Bond(prevNeuron.id, neuron.id)];
+                        weights[new Bond(prevNeuron.id, neuron.id)] += learningRate * neuron.error * prevNeuron.Output;
+                    }
+                    
+                    // Нельзя забывать про малыша bias!!!
+                    biasNeuron.error += neuron.error * weights[new Bond(biasNeuron.id, neuron.id)];
+                    weights[new Bond(biasNeuron.id, neuron.id)] += learningRate * neuron.error * biasNeuron.Output;
+                    
+                    // Мы прогнали ошибку дальше, откатываемся к изначальному виду
+                    neuron.error = 0;
                 }
             }
         }
 
         public override int Train(Sample sample, double acceptableError, bool parallel)
         {
-            // Это разве не прямой путь к переобучению?...
-            throw new NotImplementedException();
+            int cnt = 0;
+            while (true)
+            {
+                cnt++;
+                forwardPropagation(sample);
+                sample.ProcessPrediction(layers.Last().Select(n => n.Output).ToArray());
+                if (sample.EstimatedError() <= acceptableError)
+                {
+                    return cnt;
+                }
+                backwardPropagation(sample);
+            }
         }
 
         public override double TrainOnDataSet(SamplesSet samplesSet, int epochsCount, double acceptableError, bool parallel)
