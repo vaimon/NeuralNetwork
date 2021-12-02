@@ -190,7 +190,7 @@ namespace NeuralNetwork1
                 cnt++;
                 forwardPropagation(sample.input);
                 sample.ProcessPrediction(layers.Last().Select(n => n.Output).ToArray());
-                if (sample.EstimatedError() <= acceptableError)
+                if (sample.EstimatedError() <= acceptableError || cnt > 50)
                 {
                     return cnt;
                 }
@@ -200,6 +200,9 @@ namespace NeuralNetwork1
 
         public override double TrainOnDataSet(SamplesSet samplesSet, int epochsCount, double acceptableError, bool parallel)
         {
+            var start = DateTime.Now;
+            int totalSamplesCount = epochsCount * samplesSet.Count;
+            int processedSamplesCount = 0;
             double accuracy = 0.0;
             for (int i = 0; i < epochsCount; i++)
             {
@@ -210,8 +213,10 @@ namespace NeuralNetwork1
                     {
                         rightClassified++;
                     }
-                }
 
+                    processedSamplesCount++;
+                }
+                OnTrainProgress(1.0 * processedSamplesCount / totalSamplesCount, accuracy,DateTime.Now - start);
                 accuracy = rightClassified * 1.0 / samplesSet.Count;
             }
             return accuracy;
