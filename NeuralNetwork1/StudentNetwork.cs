@@ -8,7 +8,7 @@ namespace NeuralNetwork1
     {
         public static Func<double, double> activationFunction;
         public static Func<double, double> activationFunctionDerivative;
-        
+
         public int id;
         public double input;
         public int layer;
@@ -40,31 +40,19 @@ namespace NeuralNetwork1
         }
     }
 
-    struct Bond
-    {
-        public int idFrom;
-        public int idTo;
-
-        public Bond(int idFrom, int idTo)
-        {
-            this.idFrom = idFrom;
-            this.idTo = idTo;
-        }
-    }
-    
     public class StudentNetwork : BaseNetwork
     {
         private const int hiddenLayersCount = 2;
         private const double learningRate = 0.01;
 
-        private Dictionary<Bond, double> weights;
+        private Dictionary<int, Dictionary<int, double>> weights;
 
         private Neuron biasNeuron;
         private List<Neuron[]> layers;
 
-        private Func<double[],double[], double> lossFunction;
-        private Func<double,double, double> lossFunctionDerivative;
-        
+        private Func<double[], double[], double> lossFunction;
+        private Func<double, double, double> lossFunctionDerivative;
+
         public StudentNetwork(int[] structure)
         {
             if (structure.Length != 4)
@@ -87,37 +75,43 @@ namespace NeuralNetwork1
 
             Neuron.activationFunction = s => 1.0 / (1.0 + Math.Exp(-s));
             Neuron.activationFunctionDerivative = s => s * (1 - s);
-            
+
             Random random = new Random();
 
             biasNeuron = new Neuron(0, -1);
             int id = 1;
-            
+
             layers = new List<Neuron[]>();
-            weights = new Dictionary<Bond, double>();
+            weights = new Dictionary<int, Dictionary<int, double>>();
+            
+            for (int idt = 0; idt <= structure.Take(structure.Length - 1).Sum(); idt++)
+            {
+                weights[idt] = new Dictionary<int, double>();
+            }
+
             for (int layer = 0; layer < structure.Length; layer++)
             {
                 layers.Add(new Neuron[structure[layer]]);
                 for (int i = 0; i < structure[layer]; i++)
                 {
                     layers[layer][i] = new Neuron(id,layer);
-                    // Добавляем bias
-                    weights.Add(new Bond(0,id),random.NextDouble() * 2 - 1);
+                    
                     // А тут накидываем рандомные веса для предыдущих слоёв
                     if (layer > 0)
                     {
+                        // Добавляем bias
+                        weights[0][id] = random.NextDouble() * 2 - 1;
                         for (int k = 0; k < layers[layer-1].Length; k++)
                         {
-                            weights.Add(new Bond(layers[layer-1][k].id,id),random.NextDouble() * 2 - 1);
+                            weights[layers[layer-1][k].id][id] = random.NextDouble() * 2 - 1;
                         }
                     }
                     
                     id++;
                 }
             }
-            
         }
-        
+
 
         public void forwardPropagation(double[] input)
         {
@@ -125,6 +119,7 @@ namespace NeuralNetwork1
             {
                 throw new ArgumentException("Вы мне подсунули какой-то странный входной массив.");
             }
+
             // Копируем наши данные от сенсоров сразу в их output
             for (int i = 0; i < layers[0].Length; i++)
             {
@@ -139,10 +134,11 @@ namespace NeuralNetwork1
                     double scalar = 0;
                     foreach (var prevNeuron in layers[layer - 1])
                     {
-                        scalar += prevNeuron.Output * weights[new Bond(prevNeuron.id, layers[layer][neuron].id)];
+                        scalar += prevNeuron.Output * weights[prevNeuron.id][layers[layer][neuron].id];
                     }
+
                     // Добавялем к этому произведению bias
-                    scalar += biasNeuron.Output * weights[new Bond(biasNeuron.id, layers[layer][neuron].id)];
+                    scalar += biasNeuron.Output * weights[biasNeuron.id][layers[layer][neuron].id];
                     // Получили наш вход
                     layers[layer][neuron].input = scalar;
                 }
@@ -168,14 +164,14 @@ namespace NeuralNetwork1
                     // Считаем страшную сумму ошибок для предыдущего слоя и меняем веса
                     foreach (var prevNeuron in layers[layer - 1])
                     {
-                        prevNeuron.error += neuron.error * weights[new Bond(prevNeuron.id, neuron.id)];
-                        weights[new Bond(prevNeuron.id, neuron.id)] += learningRate * neuron.error * prevNeuron.Output;
+                        prevNeuron.error += neuron.error * weights[prevNeuron.id][neuron.id];
+                        weights[prevNeuron.id][neuron.id] += learningRate * neuron.error * prevNeuron.Output;
                     }
-                    
+
                     // Нельзя забывать про малыша bias!!!
-                    biasNeuron.error += neuron.error * weights[new Bond(biasNeuron.id, neuron.id)];
-                    weights[new Bond(biasNeuron.id, neuron.id)] += learningRate * neuron.error * biasNeuron.Output;
-                    
+                    biasNeuron.error += neuron.error * weights[biasNeuron.id][neuron.id];
+                    weights[biasNeuron.id][neuron.id] += learningRate * neuron.error * biasNeuron.Output;
+
                     // Мы прогнали ошибку дальше, откатываемся к изначальному виду
                     neuron.error = 0;
                 }
@@ -194,11 +190,13 @@ namespace NeuralNetwork1
                 {
                     return cnt;
                 }
+
                 backwardPropagation(sample);
             }
         }
 
-        public override double TrainOnDataSet(SamplesSet samplesSet, int epochsCount, double acceptableError, bool parallel)
+        public override double TrainOnDataSet(SamplesSet samplesSet, int epochsCount, double acceptableError,
+            bool parallel)
         {
             var start = DateTime.Now;
             int totalSamplesCount = epochsCount * samplesSet.Count;
@@ -207,18 +205,25 @@ namespace NeuralNetwork1
             for (int i = 0; i < epochsCount; i++)
             {
                 int rightClassified = 0;
-                foreach (var sample in samplesSet.samples)
+                for (var index = 0; index < samplesSet.samples.Count; index++)
                 {
+                    var sample = samplesSet.samples[index];
                     if (Train(sample, acceptableError, parallel) == 0)
                     {
                         rightClassified++;
                     }
 
                     processedSamplesCount++;
+                    if (index % 10 == 0)
+                    {
+                        OnTrainProgress(1.0 * processedSamplesCount / totalSamplesCount, accuracy, DateTime.Now - start);
+                    }
                 }
-                OnTrainProgress(1.0 * processedSamplesCount / totalSamplesCount, accuracy,DateTime.Now - start);
+
                 accuracy = rightClassified * 1.0 / samplesSet.Count;
+                OnTrainProgress(1.0 * processedSamplesCount / totalSamplesCount, accuracy, DateTime.Now - start);
             }
+
             return accuracy;
         }
 
