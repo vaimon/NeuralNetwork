@@ -94,6 +94,7 @@ namespace NeuralNetwork1
             int id = 1;
             
             layers = new List<Neuron[]>();
+            weights = new Dictionary<Bond, double>();
             for (int layer = 0; layer < structure.Length; layer++)
             {
                 layers.Add(new Neuron[structure[layer]]);
@@ -118,16 +119,16 @@ namespace NeuralNetwork1
         }
         
 
-        public void forwardPropagation(Sample sample)
+        public void forwardPropagation(double[] input)
         {
-            if (sample.input.Length != layers[0].Length)
+            if (input.Length != layers[0].Length)
             {
                 throw new ArgumentException("Вы мне подсунули какой-то странный входной массив.");
             }
             // Копируем наши данные от сенсоров сразу в их output
             for (int i = 0; i < layers[0].Length; i++)
             {
-                layers[0][i].input = sample.input[i];
+                layers[0][i].input = input[i];
             }
 
             for (int layer = 1; layer < layers.Count; layer++)
@@ -187,7 +188,7 @@ namespace NeuralNetwork1
             while (true)
             {
                 cnt++;
-                forwardPropagation(sample);
+                forwardPropagation(sample.input);
                 sample.ProcessPrediction(layers.Last().Select(n => n.Output).ToArray());
                 if (sample.EstimatedError() <= acceptableError)
                 {
@@ -199,16 +200,21 @@ namespace NeuralNetwork1
 
         public override double TrainOnDataSet(SamplesSet samplesSet, int epochsCount, double acceptableError, bool parallel)
         {
+            double accuracy = 0.0;
             for (int i = 0; i < epochsCount; i++)
             {
                 int rightClassified = 0;
                 foreach (var sample in samplesSet.samples)
                 {
-                    
-                    Train(sample, acceptableError, parallel);
+                    if (Train(sample, acceptableError, parallel) == 0)
+                    {
+                        rightClassified++;
+                    }
                 }
+
+                accuracy = rightClassified * 1.0 / samplesSet.Count;
             }
-            return 0.0;
+            return accuracy;
         }
 
         protected override double[] Compute(double[] input)
@@ -218,7 +224,8 @@ namespace NeuralNetwork1
                 throw new ArgumentException("У вас тут данных многовато...");
             }
 
-            return null;
+            forwardPropagation(input);
+            return layers.Last().Select(n => n.Output).ToArray();
         }
     }
 }
