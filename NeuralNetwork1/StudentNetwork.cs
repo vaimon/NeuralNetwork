@@ -86,9 +86,9 @@ namespace NeuralNetwork1
 
         public StudentNetwork(int[] structure)
         {
-            if (structure.Length != 4)
+            if (structure.Length < 3)
             {
-                throw new ArgumentException("Мы же договаривались о 2 скрытых слоях...");
+                throw new ArgumentException("Сетка из 0 слоёв это круто, но не пойдёт");
             }
 
             lossFunction = (output, aim) =>
@@ -285,7 +285,9 @@ namespace NeuralNetwork1
                     return mean;
                 }
             }
-
+            mean = sumError / (epochsCount * samplesSet.Count + 1);
+            OnTrainProgress(1.0,
+                       mean, DateTime.Now - start);
             return sumError / (epochsCount * samplesSet.Count);
         }
 
