@@ -99,7 +99,7 @@ namespace NeuralNetwork1
                 return res * 0.5; // / n to become MSE
             };
 
-            lossFunctionDerivative = (output, aim) => output - aim;
+            lossFunctionDerivative = (output, aim) => aim - output;
 
             Neuron.activationFunction = s => 1.0 / (1.0 + Math.Exp(-s));
             Neuron.activationFunctionDerivative = s => s * (1 - s);
@@ -236,12 +236,19 @@ namespace NeuralNetwork1
             }
         }
 
-        double TrainOnSample(Sample sample)
+        double TrainOnSample(Sample sample, double acceptableError)
         {
-            forwardPropagation(sample.input);
-            double loss = lossFunction(layers.Last().Select(n => n.Output).ToArray(), sample.outputVector);
-            backwardPropagation(sample);
-            return loss;
+            double loss;
+            while (true)
+            {
+                forwardPropagation(sample.input);
+                loss = lossFunction(layers.Last().Select(n => n.Output).ToArray(), sample.outputVector);
+                if (loss < acceptableError)
+                {
+                    return loss;
+                }
+                backwardPropagation(sample);
+            }
         }
 
         public override double TrainOnDataSet(SamplesSet samplesSet, int epochsCount, double acceptableError,
@@ -256,12 +263,12 @@ namespace NeuralNetwork1
                 for (var index = 0; index < samplesSet.samples.Count; index++)
                 {
                     var sample = samplesSet.samples[index];
-                    error = TrainOnSample(sample);
+                    error = TrainOnSample(sample, acceptableError);
                     
                     processedSamplesCount++;
                     if (error <= acceptableError)
                     {
-                        return error;
+                        //return error;
                     }
                     if (index % 10 == 0)
                     {
