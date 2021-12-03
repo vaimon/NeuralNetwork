@@ -12,7 +12,9 @@ namespace NeuralNetwork1
         public int id;
         public double Output;
         public int layer;
+
         public double error;
+
         // Веса связей от предыдущего слоя, где 0 элемент - bias, остальные - нейроны прошлого слоя в произвольном порядке (т.к. сеть полносвязная)
         public double[] weightsToPrevLayer;
 
@@ -54,6 +56,7 @@ namespace NeuralNetwork1
             {
                 Output = 1;
             }
+
             // Веса с байасами инициализируем для всех слоёв, кроме входного и самого байаса
             if (layer < 1)
             {
@@ -106,7 +109,7 @@ namespace NeuralNetwork1
 
             Random random = new Random();
 
-            biasNeuron = new Neuron(0, -1,-1, random);
+            biasNeuron = new Neuron(0, -1, -1, random);
             int id = 1;
 
             layers = new List<Neuron[]>();
@@ -118,10 +121,11 @@ namespace NeuralNetwork1
                 {
                     if (layer == 0)
                     {
-                        layers[layer][i] = new Neuron(id,layer, -1, random);
+                        layers[layer][i] = new Neuron(id, layer, -1, random);
                         continue;
                     }
-                    layers[layer][i] = new Neuron(id,layer, structure[layer - 1], random);
+
+                    layers[layer][i] = new Neuron(id, layer, structure[layer - 1], random);
 
                     id++;
                 }
@@ -164,9 +168,11 @@ namespace NeuralNetwork1
                             scalar += biasNeuron.Output * layers[layer][neuron].weightsToPrevLayer[0];
                             continue;
                         }
+
                         // Страшно, но как есть - на предыдущем слое нейроны o..Length, в векторе весов нашего нейрона - 1..Length+1
                         scalar += layers[layer - 1][i - 1].Output * layers[layer][neuron].weightsToPrevLayer[i];
                     }
+
                     // Получили наш вход
                     layers[layer][neuron].setInput(scalar);
                 }
@@ -209,6 +215,7 @@ namespace NeuralNetwork1
                             neuron.weightsToPrevLayer[0] += learningRate * neuron.error * biasNeuron.Output;
                             continue;
                         }
+
                         layers[layer - 1][i - 1].error += neuron.error * neuron.weightsToPrevLayer[i];
                         neuron.weightsToPrevLayer[i] += learningRate * neuron.error * layers[layer - 1][i - 1].Output;
                     }
@@ -227,7 +234,8 @@ namespace NeuralNetwork1
                 cnt++;
                 forwardPropagation(sample.input);
                 //sample.ProcessPrediction(layers.Last().Select(n => n.Output).ToArray());
-                if (lossFunction(layers.Last().Select(n => n.Output).ToArray(), sample.outputVector) <= acceptableError || cnt > 50)
+                if (lossFunction(layers.Last().Select(n => n.Output).ToArray(), sample.outputVector) <=
+                    acceptableError || cnt > 50)
                 {
                     return cnt;
                 }
@@ -239,16 +247,10 @@ namespace NeuralNetwork1
         double TrainOnSample(Sample sample, double acceptableError)
         {
             double loss;
-            while (true)
-            {
-                forwardPropagation(sample.input);
-                loss = lossFunction(layers.Last().Select(n => n.Output).ToArray(), sample.outputVector);
-                if (loss < acceptableError)
-                {
-                    return loss;
-                }
-                backwardPropagation(sample);
-            }
+            forwardPropagation(sample.input);
+            loss = lossFunction(layers.Last().Select(n => n.Output).ToArray(), sample.outputVector);
+            backwardPropagation(sample);
+            return loss;
         }
 
         public override double TrainOnDataSet(SamplesSet samplesSet, int epochsCount, double acceptableError,
@@ -257,27 +259,34 @@ namespace NeuralNetwork1
             var start = DateTime.Now;
             int totalSamplesCount = epochsCount * samplesSet.Count;
             int processedSamplesCount = 0;
-            double error = 0;
-            for (int i = 0; i < epochsCount; i++)
+            double sumError = 0;
+            double mean;
+            for (int epoch = 0; epoch < epochsCount; epoch++)
             {
                 for (var index = 0; index < samplesSet.samples.Count; index++)
                 {
                     var sample = samplesSet.samples[index];
-                    error = TrainOnSample(sample, acceptableError);
-                    
+                    sumError += TrainOnSample(sample, acceptableError);
+
                     processedSamplesCount++;
-                    if (error <= acceptableError)
+                    if (index % 100 == 0)
                     {
-                        //return error;
-                    }
-                    if (index % 10 == 0)
-                    {
-                        OnTrainProgress(1.0 * processedSamplesCount / totalSamplesCount, error, DateTime.Now - start);
+                        // Выводим среднюю ошибку для обработанного
+                        OnTrainProgress(1.0 * processedSamplesCount / totalSamplesCount,
+                            sumError / (epoch * samplesSet.Count + index + 1), DateTime.Now - start);
                     }
                 }
+
+                mean = sumError / ((epoch + 1) * samplesSet.Count + 1);
+                if (mean  <= acceptableError)
+                {
+                    OnTrainProgress(1.0,
+                        mean, DateTime.Now - start);
+                    return mean;
+                }
             }
-            
-            return error;
+
+            return sumError / (epochsCount * samplesSet.Count);
         }
 
         protected override double[] Compute(double[] input)
