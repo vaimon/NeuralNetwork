@@ -10,42 +10,70 @@ namespace NeuralNetwork1
         public static Func<double, double> activationFunctionDerivative;
 
         public int id;
-        public double input;
+        public double Output;
         public int layer;
         public double error;
+        // Веса связей от предыдущего слоя, где 0 элемент - bias, остальные - нейроны прошлого слоя в произвольном порядке (т.к. сеть полносвязная)
+        public double[] weightsToPrevLayer;
 
-        public double Output
+        public void setInput(double input)
         {
-            get
+            if (layer == 0)
             {
-                if (layer == -1)
-                {
-                    return 1;
-                }
-
-                if (layer == 0)
-                {
-                    return input;
-                }
-
-                return activationFunction(input);
+                Output = input;
+                return;
             }
-        }
 
-        public Neuron(int id, int layer)
+            Output = activationFunction(input);
+        }
+        // public double Output
+        // {
+        //     get
+        //     {
+        //         if (layer == -1)
+        //         {
+        //             return 1;
+        //         }
+        //
+        //         if (layer == 0)
+        //         {
+        //             return input;
+        //         }
+        //
+        //         return activationFunction(input);
+        //     }
+        // }
+
+        public Neuron(int id, int layer, int prevLayerCapacity, Random random)
         {
             this.id = id;
             this.layer = layer;
             this.error = 0;
+            // Bias стабильно выдаёт 1
+            if (layer == -1)
+            {
+                Output = 1;
+            }
+            // Веса с байасами инициализируем для всех слоёв, кроме входного и самого байаса
+            if (layer < 1)
+            {
+                weightsToPrevLayer = null;
+            }
+            else
+            {
+                weightsToPrevLayer = new double [prevLayerCapacity + 1];
+                for (int i = 0; i < weightsToPrevLayer.Length; i++)
+                {
+                    weightsToPrevLayer[i] = random.NextDouble() * 2 - 1;
+                }
+            }
         }
     }
 
     public class StudentNetwork : BaseNetwork
     {
         private const int hiddenLayersCount = 2;
-        private const double learningRate = 0.01;
-
-        private Dictionary<int, Dictionary<int, double>> weights;
+        private const double learningRate = 0.1;
 
         private Neuron biasNeuron;
         private List<Neuron[]> layers;
@@ -78,35 +106,23 @@ namespace NeuralNetwork1
 
             Random random = new Random();
 
-            biasNeuron = new Neuron(0, -1);
+            biasNeuron = new Neuron(0, -1,-1, random);
             int id = 1;
 
             layers = new List<Neuron[]>();
-            weights = new Dictionary<int, Dictionary<int, double>>();
-            
-            for (int idt = 0; idt <= structure.Take(structure.Length - 1).Sum(); idt++)
-            {
-                weights[idt] = new Dictionary<int, double>();
-            }
 
             for (int layer = 0; layer < structure.Length; layer++)
             {
                 layers.Add(new Neuron[structure[layer]]);
                 for (int i = 0; i < structure[layer]; i++)
                 {
-                    layers[layer][i] = new Neuron(id,layer);
-                    
-                    // А тут накидываем рандомные веса для предыдущих слоёв
-                    if (layer > 0)
+                    if (layer == 0)
                     {
-                        // Добавляем bias
-                        weights[0][id] = random.NextDouble() * 2 - 1;
-                        for (int k = 0; k < layers[layer-1].Length; k++)
-                        {
-                            weights[layers[layer-1][k].id][id] = random.NextDouble() * 2 - 1;
-                        }
+                        layers[layer][i] = new Neuron(id,layer, -1, random);
+                        continue;
                     }
-                    
+                    layers[layer][i] = new Neuron(id,layer, structure[layer - 1], random);
+
                     id++;
                 }
             }
@@ -123,7 +139,7 @@ namespace NeuralNetwork1
             // Копируем наши данные от сенсоров сразу в их output
             for (int i = 0; i < layers[0].Length; i++)
             {
-                layers[0][i].input = input[i];
+                layers[0][i].setInput(input[i]);
             }
 
             for (int layer = 1; layer < layers.Count; layer++)
@@ -132,15 +148,27 @@ namespace NeuralNetwork1
                 {
                     // Считаем скалярное произведение от предыдущих нейрончиков
                     double scalar = 0;
-                    foreach (var prevNeuron in layers[layer - 1])
-                    {
-                        scalar += prevNeuron.Output * weights[prevNeuron.id][layers[layer][neuron].id];
-                    }
+                    // foreach (var prevNeuron in layers[layer - 1])
+                    // {
+                    //     scalar += prevNeuron.Output * weights[prevNeuron.id][layers[layer][neuron].id];
+                    // }
+                    //
+                    // // Добавялем к этому произведению bias
+                    // scalar += biasNeuron.Output * weights[biasNeuron.id][layers[layer][neuron].id];
 
-                    // Добавялем к этому произведению bias
-                    scalar += biasNeuron.Output * weights[biasNeuron.id][layers[layer][neuron].id];
+                    for (int i = 0; i < layers[layer][neuron].weightsToPrevLayer.Length; i++)
+                    {
+                        // Обрабатываем bias
+                        if (i == 0)
+                        {
+                            scalar += biasNeuron.Output * layers[layer][neuron].weightsToPrevLayer[0];
+                            continue;
+                        }
+                        // Страшно, но как есть - на предыдущем слое нейроны o..Length, в векторе весов нашего нейрона - 1..Length+1
+                        scalar += layers[layer - 1][i - 1].Output * layers[layer][neuron].weightsToPrevLayer[i];
+                    }
                     // Получили наш вход
-                    layers[layer][neuron].input = scalar;
+                    layers[layer][neuron].setInput(scalar);
                 }
             }
         }
@@ -161,16 +189,29 @@ namespace NeuralNetwork1
                     // Применяем производную функции активации
                     neuron.error *= Neuron.activationFunctionDerivative(neuron.Output);
 
-                    // Считаем страшную сумму ошибок для предыдущего слоя и меняем веса
-                    foreach (var prevNeuron in layers[layer - 1])
-                    {
-                        prevNeuron.error += neuron.error * weights[prevNeuron.id][neuron.id];
-                        weights[prevNeuron.id][neuron.id] += learningRate * neuron.error * prevNeuron.Output;
-                    }
+                    // // Считаем страшную сумму ошибок для предыдущего слоя и меняем веса
+                    // foreach (var prevNeuron in layers[layer - 1])
+                    // {
+                    //     prevNeuron.error += neuron.error * weights[prevNeuron.id][neuron.id];
+                    //     weights[prevNeuron.id][neuron.id] += learningRate * neuron.error * prevNeuron.Output;
+                    // }
+                    //
+                    // // Нельзя забывать про малыша bias!!!
+                    // biasNeuron.error += neuron.error * weights[biasNeuron.id][neuron.id];
+                    // weights[biasNeuron.id][neuron.id] += learningRate * neuron.error * biasNeuron.Output;
 
-                    // Нельзя забывать про малыша bias!!!
-                    biasNeuron.error += neuron.error * weights[biasNeuron.id][neuron.id];
-                    weights[biasNeuron.id][neuron.id] += learningRate * neuron.error * biasNeuron.Output;
+                    for (int i = 0; i < neuron.weightsToPrevLayer.Length; i++)
+                    {
+                        // Нельзя забывать про малыша bias!!!
+                        if (i == 0)
+                        {
+                            biasNeuron.error += neuron.error * neuron.weightsToPrevLayer[0];
+                            neuron.weightsToPrevLayer[0] += learningRate * neuron.error * biasNeuron.Output;
+                            continue;
+                        }
+                        layers[layer - 1][i - 1].error += neuron.error * neuron.weightsToPrevLayer[i];
+                        neuron.weightsToPrevLayer[i] += learningRate * neuron.error * layers[layer - 1][i - 1].Output;
+                    }
 
                     // Мы прогнали ошибку дальше, откатываемся к изначальному виду
                     neuron.error = 0;
@@ -195,36 +236,41 @@ namespace NeuralNetwork1
             }
         }
 
+        double TrainOnSample(Sample sample)
+        {
+            forwardPropagation(sample.input);
+            double loss = lossFunction(layers.Last().Select(n => n.Output).ToArray(), sample.outputVector);
+            backwardPropagation(sample);
+            return loss;
+        }
+
         public override double TrainOnDataSet(SamplesSet samplesSet, int epochsCount, double acceptableError,
             bool parallel)
         {
             var start = DateTime.Now;
             int totalSamplesCount = epochsCount * samplesSet.Count;
             int processedSamplesCount = 0;
-            double accuracy = 0.0;
+            double error = 0;
             for (int i = 0; i < epochsCount; i++)
             {
-                int rightClassified = 0;
                 for (var index = 0; index < samplesSet.samples.Count; index++)
                 {
                     var sample = samplesSet.samples[index];
-                    if (Train(sample, acceptableError, parallel) == 0)
-                    {
-                        rightClassified++;
-                    }
-
+                    error = TrainOnSample(sample);
+                    
                     processedSamplesCount++;
+                    if (error <= acceptableError)
+                    {
+                        return error;
+                    }
                     if (index % 10 == 0)
                     {
-                        OnTrainProgress(1.0 * processedSamplesCount / totalSamplesCount, accuracy, DateTime.Now - start);
+                        OnTrainProgress(1.0 * processedSamplesCount / totalSamplesCount, error, DateTime.Now - start);
                     }
                 }
-
-                accuracy = rightClassified * 1.0 / samplesSet.Count;
-                OnTrainProgress(1.0 * processedSamplesCount / totalSamplesCount, accuracy, DateTime.Now - start);
             }
-
-            return accuracy;
+            
+            return error;
         }
 
         protected override double[] Compute(double[] input)
