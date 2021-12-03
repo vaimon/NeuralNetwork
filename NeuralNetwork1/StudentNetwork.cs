@@ -148,7 +148,7 @@ namespace NeuralNetwork1
 
             for (int layer = 1; layer < layers.Count; layer++)
             {
-                for (int neuron = 0; neuron < layers[layer].Length; neuron++)
+                for (int neuron = 0; neuron < layers[layer].Length; neuron++) // TODO Parallel
                 {
                     // Считаем скалярное произведение от предыдущих нейрончиков
                     double scalar = 0;

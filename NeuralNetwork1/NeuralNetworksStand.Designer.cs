@@ -341,7 +341,7 @@
             // label8
             // 
             this.label8.AutoSize = true;
-            this.label8.Location = new System.Drawing.Point(834, 565);
+            this.label8.Location = new System.Drawing.Point(875, 565);
             this.label8.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.label8.Name = "label8";
             this.label8.Size = new System.Drawing.Size(0, 20);
@@ -350,12 +350,12 @@
             // label9
             // 
             this.label9.AutoSize = true;
-            this.label9.Location = new System.Drawing.Point(783, 565);
+            this.label9.Location = new System.Drawing.Point(772, 565);
             this.label9.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.label9.Name = "label9";
-            this.label9.Size = new System.Drawing.Size(22, 80);
+            this.label9.Size = new System.Drawing.Size(86, 80);
             this.label9.TabIndex = 7;
-            this.label9.Text = "0:\r\n1:\r\n2:\r\n3:";
+            this.label9.Text = "Triangle:\r\nRectangle:\r\nCircle:\r\nSinusoid:";
             // 
             // trainOneButton
             // 
